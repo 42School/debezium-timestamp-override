@@ -1,0 +1,69 @@
+import java.time.Instant
+
+plugins {
+    id 'groovy'
+    id 'java-library'
+    id 'net.nemerosa.versioning' version '2.15.1'
+}
+
+group 'fr.fortytwo'
+version = versioning.info.tag
+
+repositories {
+    mavenCentral()
+}
+
+ext {
+    debeziumVersion = properties.debeziumVersion
+    kafkaVersion = properties.kafkaVersion
+}
+
+dependencies {
+    implementation(group: 'io.debezium', name: 'debezium-core', version: debeziumVersion) {
+        exclude group: 'com.fasterxml.jackson.core'
+        exclude group: 'org.slf4j'
+    }
+    compileOnly 'org.slf4j:slf4j-api:1.7.30'
+
+    [[group: 'org.apache.kafka', name: 'connect-api', version: kafkaVersion],
+     [group: 'org.apache.kafka', name: 'connect-transforms', version: kafkaVersion]].each {
+        compileOnly it
+        testImplementation it
+    }
+    testRuntimeOnly 'org.slf4j:slf4j-log4j12:1.7.30'
+}
+
+compileJava {
+    options.compilerArgs << '-parameters'
+    options.release.set 11
+}
+
+jar {
+    archiveBaseName.set rootProject.name
+    manifest {
+        attributes(
+          'Built-By': System.properties['user.name'],
+          'Build-Timestamp': "${Instant.now()}",
+          'Build-Revision': versioning.info.commit,
+          'Created-By': "Gradle ${gradle.gradleVersion}",
+          'Build-Jdk': "${System.properties['java.version']} (${System.properties['java.vendor']} ${System.properties['java.vm.version']})",
+          'Build-OS': "${System.properties['os.name']} ${System.properties['os.arch']} ${System.properties['os.version']}",
+          'Version': "${gradle.rootProject.version}"
+        )
+    }
+}
+
+testing {
+    suites {
+        test {
+            useSpock '2.1-M2-groovy-3.0'
+        }
+    }
+}
+
+task copyDependencies(type: Copy) {
+    into "$buildDir/deps"
+    from configurations.runtimeClasspath
+}
+
+build.dependsOn copyDependencies
